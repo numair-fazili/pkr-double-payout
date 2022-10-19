@@ -33,7 +33,7 @@ FINDING PAYOUTS AND CREATING SKELETON FOR MASTER TABLE
 
      num_payouts AS (SELECT COUNT(*)                        as pcount,
                             ats.affected_transfer           as transfer_id,
-                            IFF(COUNT(*) > 1, 'DPO', 'SPO') as payoutClassification -- IF COUNT > 1 THEN DPO: DOUBLE PAYOUT ELSE SPO: SINGLE PAYOUT - NOTE: THIS IS NOT THE FINAL CLASSIFICATION AND FURTHER UPDATES FOLLOW
+                            IFF(COUNT(*) > 1, 'DPO', 'SPO') as PAYOUT_CLASSIFICATION -- IF COUNT > 1 THEN DPO: DOUBLE PAYOUT ELSE SPO: SINGLE PAYOUT - NOTE: THIS IS NOT THE FINAL CLASSIFICATION AND FURTHER UPDATES FOLLOW
                      FROM payout.core_payout_instruction poi,
                           affected_transfers ats
                      WHERE poi.sender_id = ats.affected_transfer
@@ -50,7 +50,7 @@ FINDING PAYOUTS AND CREATING SKELETON FOR MASTER TABLE
                                                    over (partition by np.transfer_id order by poi.id)                 as FIRST_PAYOUT_TYPE  -- USED IN CONJUNCTION WITH LAST_PAYOUT_TYPE TO IDENTIFY CASES WITH EXCESS REFUND
                                      , last_value(poi.PAYOUT_TYPE)
                                                   over (partition by np.transfer_id order by poi.id)                  as LAST_PAYOUT_TYPE
-                                     , payoutClassification
+                                     , PAYOUT_CLASSIFICATION
                        from payout.core_payout_instruction poi,
                             num_payouts np
                        WHERE poi.sender_id = np.transfer_id),
@@ -69,7 +69,7 @@ UPDATING RECORDS WHERE FIRST AND LAST POI STATES ARE T-R OR R-R AS SPO. THE CURR
                                                   IFF(
                                                               (dp.first_poi_state = 'TRANSFERRED' AND dp.last_poi_state = 'REJECTED') OR
                                                               (dp.first_poi_state = 'REJECTED' AND dp.last_poi_state = 'REJECTED'),
-                                                              'SPO', dp.payoutClassification) as payoutClassification
+                                                              'SPO', dp.PAYOUT_CLASSIFICATION) as PAYOUT_CLASSIFICATION
                                   from double_payout dp),
 
 /*
@@ -85,7 +85,7 @@ MARK CASES WHERE EXCESS REFUND WAS ISSUED AS SPO. FOR THESE RECORDS THE SECOND P
                                                        FIRST_PAYOUT_TYPE,
                                                        LAST_PAYOUT_TYPE,
                                                        IFF(FIRST_PAYOUT_TYPE = 'TARGET' and LAST_PAYOUT_TYPE = 'REFUND',
-                                                           'SPO', payoutClassification) as payoutClassification
+                                                           'SPO', PAYOUT_CLASSIFICATION) as PAYOUT_CLASSIFICATION
                                        from double_payout_w_rejected dp)
 
 SELECT masterTable.*, TT.STATE as TRANSFER_STATE,TT.SOURCE_CURRENCY,TT.SOURCE_VALUE
